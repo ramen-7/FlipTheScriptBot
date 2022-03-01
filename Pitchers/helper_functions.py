@@ -4,10 +4,9 @@ from random import choice
 from string import ascii_uppercase
 
 
-try:
-        df = pd.read_csv('teams.csv')
-except pd.errors.EmptyDataError:
-    pass
+
+teams = pd.read_csv('teams.csv')
+print(teams.head())
 
 def make_embed(text, titl, color=discord.Colour.blue(), url=None):
     embed = discord.Embed(color=color, description=text, title=titl)
@@ -17,7 +16,7 @@ def make_embed(text, titl, color=discord.Colour.blue(), url=None):
 
 def generate_team_code():
     code = ''.join(choice(ascii_uppercase) for i in range(12))
-    if code not in teams['Team Code']:
+    if code not in teams['TeamCode']:
         return code
     else:
         return generate_team_code()

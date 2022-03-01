@@ -8,15 +8,6 @@ from discord_slash.utils.manage_commands import create_option, create_choice
 import pandas as pd
 from helper_functions import make_embed, generate_team_code
 import csv
-
-fieldnames = ['Name', 'Email', 'Roll Number', 'Phone Number', 'Discord Id', 'Team Name']
-with open('register.csv', 'a', newline='') as file:
-    thewriter = csv.DictWriter(file, fieldnames=fieldnames)
-    thewriter.writeheader()
-fieldnames2 = ['Team Name', 'Team Code']
-with open('teams.csv', 'a', newline='') as team:
-    thewriter = csv.DictWriter(file, fieldnames=fieldnames2)
-    thewriter.writeheader()
 df = pd.read_csv('teams2.csv')
 df2 = pd.read_csv('individual.csv')
 game = pd.read_csv('game.csv')
@@ -155,10 +146,10 @@ async def sell_shares(ctx, sell_share_of: str, quantity: int):
 
 @slash.slash(name='register', description='Register yourself')
 async def register(ctx, name: str, email: str, roll_number: int, phone_number: int):
-    with open('register.csv', 'a', newline='') as file:
-        thewriter = csv.DictWriter(file, fieldnames=fieldnames)
-        thewriter.writerow({'Name': name, 'Email': email, 'Roll Number': roll_number, 'Phone Number': phone_number, 'Discord Id': str(ctx.author)})
-        file.close()
+    register = pd.read_csv('register.csv')
+    append = pd.DataFrame({'Name': [name], 'Email': [email], 'Roll Number': [roll_number], 'Phone Number': [phone_number], 'Discord Id': [str(ctx.author)]})
+    register = pd.concat((register, append), axis=0)
+    register.to_csv('register.csv')
     output = f"""Name: {name}
 Email: {email}
 Roll Number: {roll_number}
@@ -171,10 +162,11 @@ Discord Id : {ctx.author.mention}
 
 @slash.slash(name='create_team', description='Join ')
 async def create_name(ctx, team_name: str):
-    with open('teams.csv', 'a', newline='') as team:
-        thewriter = csv.DictWriter(team, fieldnames=fieldnames2)
-        code = generate_team_code()
-        thewriter.writerow({'Team Name': team_name, 'Team Code': code})
+    code = generate_team_code()
+    teams = pd.read_csv('teams.csv')
+    append_data = pd.DataFrame({'TeamName':[team_name], 'TeamCode':[code]})
+    teams = pd.concat((teams, append_data), axis=0)
+    teams.to_csv('teams.csv')
     output = f"""Team {team_name} has been created
 Unique code for team {code}
 Please share this code with your team mates"""
@@ -183,9 +175,9 @@ Please share this code with your team mates"""
     guild = ctx.message.guild
     await ctx.guild.create_role(name=team_name)
     role = discord.utils.get(ctx.guild.roles, name=team_name)
-    await ctx.author.add_role(role)
     register[register['Discord Id'] == str(ctx.author)]['Team Name'] = team_name
     register.to_csv('register.csv')
+    await client.add_roles(ctx.author, role)
 
 @slash.slash(name='Ping', description='Ping command')
 async def ping(ctx):
@@ -199,4 +191,4 @@ async def ping(ctx):
 #     await ctx.send(embed=emx)
 
 
-client.run('ODIyMTg4NzU2ODUzMDYzNzAw.YFOo8w.KV7XsQKWVGi68LzYDrob5k25P50')
+client.run('ODIyMTg4NzU2ODUzMDYzNzAw.YFOo8w.GO7Z6Q3p8yGZtFt8wX61rdPmnR4')
