@@ -1,13 +1,12 @@
-import sys
-
 import discord
+import numpy as np
 from discord.ext import commands
 from discord.utils import get
-from discord_slash import SlashCommand, cog_ext, SlashContext
-from discord_slash.utils.manage_commands import create_option, create_choice
+from discord_slash import SlashCommand
 import pandas as pd
 from helper_functions import make_embed, generate_team_code
-import csv
+
+
 df = pd.read_csv('teams2.csv')
 df2 = pd.read_csv('individual.csv')
 game = pd.read_csv('game.csv')
@@ -137,11 +136,11 @@ async def buy_share(ctx, buy_share_of: str, quantity: int):
     emx = make_embed(titl="Shares Bought", text=output)
     await ctx.send(embed=emx)
 
-@slash.slash(name='sell_shares', description='Sell your existing shares')
-async def sell_shares(ctx, sell_share_of: str, quantity: int):
-    author = str(ctx.author)
-    author_team = participants.loc[author, 'Team']
-    current_shares = game.loc[author_team, sell_share_of]
+# @slash.slash(name='sell_shares', description='Sell your existing shares')
+# async def sell_shares(ctx, sell_share_of: str, quantity: int):
+#     author = str(ctx.author)
+#     author_team = participants.loc[author, 'Team']
+#     current_shares = game.loc[author_team, sell_share_of]
 
 
 @slash.slash(name='register', description='Register yourself')
@@ -149,7 +148,7 @@ async def register(ctx, name: str, email: str, roll_number: int, phone_number: i
     register = pd.read_csv('register.csv')
     append = pd.DataFrame({'Name': [name], 'Email': [email], 'Roll Number': [roll_number], 'Phone Number': [phone_number], 'Discord Id': [str(ctx.author)]})
     register = pd.concat((register, append), axis=0)
-    register.to_csv('register.csv')
+    register.to_csv('register.csv', index=False)
     output = f"""Name: {name}
 Email: {email}
 Roll Number: {roll_number}
@@ -160,35 +159,88 @@ Discord Id : {ctx.author.mention}
     await ctx.send(embed=emx)
 
 
-@slash.slash(name='create_team', description='Join ')
+@slash.slash(name='create_team', description='Create your team')
 async def create_name(ctx, team_name: str):
+    register = pd.read_csv('register.csv')
     code = generate_team_code()
     teams = pd.read_csv('teams.csv')
     append_data = pd.DataFrame({'TeamName':[team_name], 'TeamCode':[code]})
     teams = pd.concat((teams, append_data), axis=0)
-    teams.to_csv('teams.csv')
+    teams.to_csv('teams.csv', index=False)
     output = f"""Team {team_name} has been created
-Unique code for team {code}
+Unique code for team `{code}`
 Please share this code with your team mates"""
     emx = make_embed(titl='Team Created!', text=output, color=discord.Color.green())
+    register.to_csv('register.csv', index=False)
     await ctx.send(embed=emx)
-    guild = ctx.message.guild
     await ctx.guild.create_role(name=team_name)
-    role = discord.utils.get(ctx.guild.roles, name=team_name)
-    register[register['Discord Id'] == str(ctx.author)]['Team Name'] = team_name
-    register.to_csv('register.csv')
-    await client.add_roles(ctx.author, role)
+    role = get(ctx.guild.roles, name=team_name)
+    print(role)
+    await ctx.author.add_roles(role)
+
+
+@slash.slash(name='join_team', description='Use this command to join your team by entering the team id')
+async def join_team(ctx, id: str):
+    register = pd.read_csv('register.csv')
+    teams = pd.read_csv('teams.csv')
+    teamList = list(teams['TeamCode'])
+    if id in teamList:
+        team_name = teams[teams['TeamCode'] == id].TeamName.item()
+        mask = (register['Discord Id'] == str(ctx.author))
+        if register.loc[mask, 'Team Name'].isnull().item():
+            print("yes")
+            register.loc[mask, 'Team Name'] = team_name
+            register.to_csv('register.csv', index=False)
+            emx = make_embed(titl='Team joined!', text=f'You were able to join team {team_name}', color=discord.Color.green())
+            await ctx.send(embed=emx)
+            role = get(ctx.guild.roles, name=team_name)
+            await ctx.author.add_roles(role)
+        else:
+            current_team = register.loc[mask, 'Team Name'].item()
+            emx = make_embed(titl='Already part of a team', text=f"You are already a part of the team `{current_team}`", color=discord.Color.blue())
+            await ctx.send(embed=emx)
+    else:
+        emx2 = make_embed(titl='Unable to join team :(', text=f'{id} is invalid', color=discord.Color.red())
+        await ctx.send(embed=emx2)
+
+
+@slash.slash(name='display_team', description='Display your team')
+async def display_team(ctx, id: str):
+    register = pd.read_csv('register.csv')
+    teams = pd.read_csv('teams.csv')
+    teamList = list(teams['TeamCode'])
+    if id in teamList:
+        team_name = teams[teams['TeamCode'] == id].TeamName.item()
+        mask = register.loc[register['Team Name'] == team_name]
+        team_members = list(mask['Discord Id'])
+        output = ""
+        for members in team_members:
+            output = members + "\n" + output
+        emx = make_embed(titl='Team Members', text=output, color=discord.Color.blue())
+        await ctx.send(embed=emx)
+    else:
+        emx2 = make_embed(titl='Unable to join team :(', text=f'{id} is invalid', color=discord.Color.red())
+        await ctx.send(embed=emx2)
+
+
+@slash.slash(name='leave_team', description='Use this command to leave your current team')
+async def leave_team(ctx):
+    register = pd.read_csv('register.csv')
+    teams = pd.read_csv('teams.csv')
+    mask = register['Discord Id'] == str(ctx.author)
+    current_team = register.loc[mask, 'Team Name'].item()
+    if register.loc[mask, 'Team Name'].isnull().item():
+        emx = make_embed(titl="Invalid Request", text='You are not a part of any team', color=discord.Color.red())
+        await ctx.send(embed=emx)
+    else:
+        register.loc[mask, 'Team Name'] = np.nan
+        register.to_csv('register.csv', index=False)
+        emx = make_embed(titl="Team Left", text=f'You have successfully left the team `{current_team}`', color=discord.Color.green())
+        await ctx.send(embed=emx)
 
 @slash.slash(name='Ping', description='Ping command')
 async def ping(ctx):
     await ctx.send("Pong")
 
 
-# @slash.slash(name='testslash', description='test slash command')
-# async def test(ctx, opt: str):
-#     await ctx.send(content=f"Okay! I'm setting your current mood to {opt} :p")
-#     emx = make_embed(text=f'{ctx.author} typed the message')
-#     await ctx.send(embed=emx)
-
-
-client.run('ODIyMTg4NzU2ODUzMDYzNzAw.YFOo8w.GO7Z6Q3p8yGZtFt8wX61rdPmnR4')
+client.run('ODIyMTg4NzU2ODUzMDYzNzAw.YFOo8w.k-FbgQcu_eGcMJ_rEfyZ0jMlRqU')
